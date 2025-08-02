@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/transaction.dart';
 import '../services/hive_service.dart';
 
@@ -21,37 +22,36 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   final _amountController = TextEditingController();
 
   Future<void> _saveTransaction() async {
-  final title = _titleController.text.trim();
-  final amount = double.tryParse(_amountController.text.trim());
+    final title = _titleController.text.trim();
+    final amount = double.tryParse(_amountController.text.trim());
 
-  if (title.isEmpty || amount == null || amount <= 0) return;
+    if (title.isEmpty || amount == null || amount <= 0) return;
 
-  final tx = TransactionModel(
-    title: title,
-    amount: amount,
-    date: widget.transactionToEdit?.date ?? DateTime.now(),
-  );
+    final tx = TransactionModel(
+      title: title,
+      amount: amount,
+      date: widget.transactionToEdit?.date ?? DateTime.now(),
+    );
 
-  if (widget.indexToEdit != null) {
-    // Update existing
-    await HiveService.updateTransaction(widget.indexToEdit!, tx);
-  } else {
-    // Add new
-    await HiveService.addTransaction(tx);
+    if (widget.indexToEdit != null) {
+      // Update existing
+      await HiveService.updateTransaction(widget.indexToEdit!, tx);
+    } else {
+      // Add new
+      await HiveService.addTransaction(tx);
+    }
+
+    Navigator.pop(context, true);
   }
-
-  Navigator.pop(context, true);
-}
-
 
   @override
   void initState() {
     super.initState();
 
-if (widget.transactionToEdit != null) {
-  _titleController.text = widget.transactionToEdit!.title;
-  _amountController.text = widget.transactionToEdit!.amount.toString();
-}
+    if (widget.transactionToEdit != null) {
+      _titleController.text = widget.transactionToEdit!.title;
+      _amountController.text = widget.transactionToEdit!.amount.toString();
+    }
   }
 
   @override
@@ -68,8 +68,12 @@ if (widget.transactionToEdit != null) {
             ),
             TextField(
               controller: _amountController,
-              keyboardType: TextInputType.numberWithOptions(decimal: true),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(labelText: 'Amount'),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+              ],
             ),
             const SizedBox(height: 20),
             ElevatedButton(

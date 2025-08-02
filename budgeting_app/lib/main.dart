@@ -13,9 +13,26 @@ void main() async {
   await Hive.openBox<TransactionModel>('transactions');
   await Hive.openBox<double>('budget');
 
-  runApp(MaterialApp(
-    title: 'Budgeting App',
-    theme: ThemeData(primarySwatch: Colors.blue),
-    home: HomeScreen(),
-  ));
+  runApp(BudgetingApp());
+}
+
+class BudgetingApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Budgeting App',
+      theme: ThemeData(
+        brightness: Brightness.light,
+        colorSchemeSeed: Colors.indigo,
+        useMaterial3: true,
+      ),
+      darkTheme: ThemeData(
+        brightness: Brightness.dark,
+        colorSchemeSeed: Colors.indigo,
+        useMaterial3: true,
+      ),
+      themeMode: ThemeMode.system,
+      home: const HomeScreen(),
+    );
+  }
 }
