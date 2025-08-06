@@ -1,16 +1,1 @@
-{
-  "hosting": {
-    "public": "build/web",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
-    "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
-    ]
-  }
-}
+{"hosting":{"public":"build/web","ignore":["firebase.json","**/.*","**/node_modules/**"],"rewrites":[{"source":"**","destination":"/index.html"}]},"flutter":{"platforms":{"android":{"default":{"projectId":"budgeting-app-3f26d","appId":"1:401243472617:android:c540cfff6886b814962678","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"budgeting-app-3f26d","configurations":{"android":"1:401243472617:android:c540cfff6886b814962678","ios":"1:401243472617:ios:ea70f26e26924d60962678","web":"1:401243472617:web:fc5db61d6a81fb1a962678"}}}}}}

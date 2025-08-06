@@ -18,4 +18,21 @@ class TransactionModel extends HiveObject {
     required this.amount,
     required this.date,
   });
+
+  // --- Firebase serialization ---
+  Map<String, dynamic> toFirestore() {
+    return {
+      'title': title,
+      'amount': amount,
+      'date': date.toIso8601String(),
+    };
+  }
+
+  factory TransactionModel.fromFirestore(Map<String, dynamic> map) {
+    return TransactionModel(
+      title: map['title'] ?? '',
+      amount: (map['amount'] ?? 0).toDouble(),
+      date: DateTime.parse(map['date']),
+    );
+  }
 }

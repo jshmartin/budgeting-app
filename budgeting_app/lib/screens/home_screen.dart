@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/transaction.dart';
+import '../services/firebase_service.dart';
 import 'add_transaction_screen.dart';
 import 'package:hive/hive.dart';
 import '../services/hive_service.dart';
@@ -23,18 +24,40 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadBudget();
   }
 
-  Future<void> _loadTransactions() async {
+Future<void> _loadTransactions() async {
   final txBox = Hive.box<TransactionModel>('transactions');
 
-  final entries = txBox.toMap().entries
+  // Load from Hive first
+  final hiveEntries = txBox.toMap().entries
+      .where((e) => e.key is int)
+      .map((e) => MapEntry(e.key as int, e.value))
+      .toList();
+
+  if (hiveEntries.isNotEmpty) {
+    setState(() {
+      _transactions = hiveEntries;
+    });
+    return;
+  }
+
+  // If Hive is empty, fetch from Firebase and save locally
+  final firebaseTxList = await FirebaseService.fetchTransactionsFromFirebase();
+
+  for (final tx in firebaseTxList) {
+    await txBox.add(tx);
+  }
+
+  // Reload from Hive again (now it should be populated)
+  final updatedEntries = txBox.toMap().entries
       .where((e) => e.key is int)
       .map((e) => MapEntry(e.key as int, e.value))
       .toList();
 
   setState(() {
-    _transactions = entries;
+    _transactions = updatedEntries;
   });
 }
+
 
 
   void _openAddTransaction() async {

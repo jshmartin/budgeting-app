@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/transaction.dart';
+import '../services/firebase_service.dart';
 import '../services/hive_service.dart';
 
 class AddTransactionScreen extends StatefulWidget {
@@ -39,6 +40,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     } else {
       // Add new
       await HiveService.addTransaction(tx);
+      await FirebaseService.saveTransactionToFirebase(tx); // Save to Firebase
     }
 
     Navigator.pop(context, true);
