@@ -1,4 +1,5 @@
 import 'package:hive/hive.dart';
+import '../models/budget.dart';
 import '../models/transaction.dart';
 
 class HiveService {
@@ -24,12 +25,14 @@ class HiveService {
     await _txBox.deleteAt(index);
   }
 
-  // Budget
-  static double getBudget() {
-    return _budgetBox.get('initial', defaultValue: 0.0)!;
+  static Future<void> saveBudget(BudgetModel budget) async {
+    final box = Hive.box<BudgetModel>('budgets');
+    await box.clear(); // Optional: store one active budget
+    await box.add(budget);
   }
 
-  static Future<void> setBudget(double value) async {
-    await _budgetBox.put('initial', value);
+  static BudgetModel? loadBudget() {
+    final box = Hive.box<BudgetModel>('budgets');
+    return box.values.isEmpty ? null : box.values.first;
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/budget.dart';
 import '../models/transaction.dart';
 import '../services/firebase_service.dart';
 import 'add_transaction_screen.dart';
@@ -24,41 +25,44 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadBudget();
   }
 
-Future<void> _loadTransactions() async {
-  final txBox = Hive.box<TransactionModel>('transactions');
+  Future<void> _loadTransactions() async {
+    final txBox = Hive.box<TransactionModel>('transactions');
 
-  // Load from Hive first
-  final hiveEntries = txBox.toMap().entries
-      .where((e) => e.key is int)
-      .map((e) => MapEntry(e.key as int, e.value))
-      .toList();
+    // Load from Hive first
+    final hiveEntries = txBox
+        .toMap()
+        .entries
+        .where((e) => e.key is int)
+        .map((e) => MapEntry(e.key as int, e.value))
+        .toList();
 
-  if (hiveEntries.isNotEmpty) {
+    if (hiveEntries.isNotEmpty) {
+      setState(() {
+        _transactions = hiveEntries;
+      });
+      return;
+    }
+
+    // If Hive is empty, fetch from Firebase and save locally
+    final firebaseTxList =
+        await FirebaseService.fetchTransactionsFromFirebase();
+
+    for (final tx in firebaseTxList) {
+      await txBox.add(tx);
+    }
+
+    // Reload from Hive again (now it should be populated)
+    final updatedEntries = txBox
+        .toMap()
+        .entries
+        .where((e) => e.key is int)
+        .map((e) => MapEntry(e.key as int, e.value))
+        .toList();
+
     setState(() {
-      _transactions = hiveEntries;
+      _transactions = updatedEntries;
     });
-    return;
   }
-
-  // If Hive is empty, fetch from Firebase and save locally
-  final firebaseTxList = await FirebaseService.fetchTransactionsFromFirebase();
-
-  for (final tx in firebaseTxList) {
-    await txBox.add(tx);
-  }
-
-  // Reload from Hive again (now it should be populated)
-  final updatedEntries = txBox.toMap().entries
-      .where((e) => e.key is int)
-      .map((e) => MapEntry(e.key as int, e.value))
-      .toList();
-
-  setState(() {
-    _transactions = updatedEntries;
-  });
-}
-
-
 
   void _openAddTransaction() async {
     final result = await Navigator.push(
@@ -71,15 +75,40 @@ Future<void> _loadTransactions() async {
     }
   }
 
-
-  double _initialBudget = HiveService.getBudget();
-  double get _totalSpent => _transactions.fold(0.0, (sum, entry) => sum + entry.value.amount);
-  double get _remainingBudget => _initialBudget - _totalSpent;
+  double _initialBudget = 0.0;
+  BudgetModel? _budgetModel;
 
   Future<void> _loadBudget() async {
-    setState(() {
-      _initialBudget = HiveService.getBudget();
-    });
+    final localBudget = HiveService.loadBudget();
+
+    if (localBudget != null) {
+      setState(() {
+        _budgetModel = localBudget;
+        _initialBudget = localBudget.amount;
+      });
+      return;
+    }
+
+    // If not found locally, pull from Firebase and save to Hive
+    final firebaseBudgets = await FirebaseService.fetchBudgetsFromFirebase();
+
+    if (firebaseBudgets.isNotEmpty) {
+      final latest = firebaseBudgets.first;
+      await HiveService.saveBudget(latest);
+
+      setState(() {
+        _budgetModel = latest;
+        _initialBudget = latest.amount;
+      });
+    }
+  }
+
+  double get _totalSpent {
+    return _transactions.fold(0.0, (sum, entry) => sum + entry.value.amount);
+  }
+
+  double get _remainingBudget {
+    return _initialBudget - _totalSpent;
   }
 
   Future<void> _promptSetBudget() async {
@@ -109,7 +138,16 @@ Future<void> _loadTransactions() async {
     );
 
     if (result != null && result > 0) {
-      await HiveService.setBudget(result);
+      final newBudget = BudgetModel(
+        title: 'My Budget',
+        amount: result,
+        startDate: DateTime.now(),
+        endDate:
+            DateTime.now().add(const Duration(days: 30)), // or custom range
+      );
+
+      await HiveService.saveBudget(newBudget);
+      await FirebaseService.saveBudgetToFirebase(newBudget);
       await _loadBudget();
     }
   }

@@ -2,6 +2,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'firebase_options.dart';
+import 'models/budget.dart';
 import 'models/transaction.dart';
 import 'screens/home_screen.dart';
 
@@ -14,9 +15,12 @@ void main() async {
   await Hive.initFlutter();
 
   Hive.registerAdapter(TransactionModelAdapter());
+  Hive.registerAdapter(BudgetModelAdapter());
+
 
   await Hive.openBox<TransactionModel>('transactions');
-  await Hive.openBox<double>('budget');
+  await Hive.openBox<BudgetModel>('budgets');
+
 
   runApp(BudgetingApp());
 }
