@@ -5,12 +5,19 @@ import 'firebase_options.dart';
 import 'models/budget.dart';
 import 'models/transaction.dart';
 import 'screens/home_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  final auth = FirebaseAuth.instance;
+  if (auth.currentUser == null) {
+    await auth.signInAnonymously();
+  }
 
   await Hive.initFlutter();
 
@@ -29,6 +36,7 @@ class BudgetingApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'Budgeting App',
       theme: ThemeData(
         brightness: Brightness.light,

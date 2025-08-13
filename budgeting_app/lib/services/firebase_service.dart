@@ -1,24 +1,25 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/budget.dart';
 import '../models/transaction.dart';
 
 class FirebaseService {
   static final _firestore = FirebaseFirestore.instance;
-  static final _transactionsRef = _firestore.collection('transactions');
+  static String get _uid => FirebaseAuth.instance.currentUser!.uid;
+
+  
+  static CollectionReference<Map<String, dynamic>> get _budgetRef =>
+      _firestore.collection('users').doc(_uid).collection('budgets');
+
+  static CollectionReference<Map<String, dynamic>> get _transactionsRef =>
+      _firestore.collection('users').doc(_uid).collection('transactions');
 
   static Future<void> saveTransactionToFirebase(TransactionModel tx) async {
-    print("Saving transaction to Firebase: ${tx.toFirestore()}");
     await _transactionsRef.add(tx.toFirestore());
   }
-
-  // Fetch all transactions from Firestore
   static Future<List<TransactionModel>> fetchTransactionsFromFirebase() async {
-    final snapshot =
-        await _transactionsRef.orderBy('date', descending: true).get();
-
-    return snapshot.docs
-        .map((doc) => TransactionModel.fromFirestore(doc.data()))
-        .toList();
+    final qs = await _transactionsRef.orderBy('date', descending: true).get();
+    return qs.docs.map((d) => TransactionModel.fromFirestore(d.data())).toList();
   }
 
   // Clear all transactions from Firestore
@@ -29,19 +30,13 @@ class FirebaseService {
     }
   }
 
-  static final _budgetRef = _firestore.collection('budgets');
 
-  static Future<void> saveBudgetToFirebase(BudgetModel budget) async {
-    await _budgetRef.add(budget.toFirestore());
+  static Future<void> saveBudgetToFirebase(BudgetModel b) async {
+    await _budgetRef.add(b.toFirestore());
   }
-
-  // Fetch all budgets from Firestore
   static Future<List<BudgetModel>> fetchBudgetsFromFirebase() async {
-    final snapshot = await _budgetRef.orderBy('startDate', descending: true).get();
-
-    return snapshot.docs
-        .map((doc) => BudgetModel.fromFirestore(doc.data()))
-        .toList();
+    final qs = await _budgetRef.orderBy('startDate', descending: true).get();
+    return qs.docs.map((d) => BudgetModel.fromFirestore(d.data())).toList();
   }
 
   // Clear all budgets from Firestore

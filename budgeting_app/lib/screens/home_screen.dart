@@ -7,6 +7,8 @@ import 'package:hive/hive.dart';
 import '../services/hive_service.dart';
 import '../models/transaction.dart';
 import 'add_transaction_screen.dart';
+import 'auth_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -280,8 +282,108 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('My Budget'),
+        actions: [
+          // Live auth status
+          StreamBuilder<User?>(
+            stream: FirebaseAuth.instance.authStateChanges(),
+            builder: (context, snapshot) {
+              final user = snapshot.data;
+
+              // Label for the chip
+              final label = (user == null || user.isAnonymous)
+                  ? 'Guest'
+                  : (user.email ?? 'Signed in');
+
+              // Whether the sign-in option should be disabled
+              final isSignedIn = (user != null && !user.isAnonymous);
+
+              return Row(
+                children: [
+                  // Status chip
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8.0),
+                    child: Chip(label: Text(label)),
+                  ),
+
+                  // Menu with conditional enable/disable
+                  PopupMenuButton<String>(
+                    onSelected: (value) async {
+                      if (value == 'account') {
+                        // Only allow if not signed in
+                        if (!isSignedIn) {
+                          final ok = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const AuthScreen()),
+                          );
+                          if (ok == true) {
+                            await _loadBudget(); // refresh scoped data
+                            await _loadTransactions(); // refresh scoped data
+                          }
+                        }
+                      } else if (value == 'signout') {
+                        await FirebaseAuth.instance.signOut();
+                        // After sign out, re‑anon sign in automatically on next start.
+                        await FirebaseAuth.instance.signInAnonymously();
+                        await _loadBudget();
+                        await _loadTransactions();
+                      }
+                    },
+                    itemBuilder: (ctx) => [
+                      // Sign in / Create account (disabled when already signed in)
+                      PopupMenuItem(
+                        value: 'account',
+                        enabled: !isSignedIn,
+                        child: Text(
+                          'Sign in / Create account',
+                          style: TextStyle(
+                            color: !isSignedIn
+                                ? null
+                                : Theme.of(context).disabledColor,
+                          ),
+                        ),
+                      ),
+                      // Optional: Sign out (only when signed in)
+                      if (isSignedIn)
+                        const PopupMenuItem(
+                          value: 'signout',
+                          child: Text('Sign out'),
+                        ),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
       body: Column(
         children: [
+          StreamBuilder<User?>(
+            stream: FirebaseAuth.instance.authStateChanges(),
+            builder: (context, snapshot) {
+              final user = snapshot.data;
+              final signedIn = (user != null && !user.isAnonymous);
+              return Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  signedIn
+                      ? 'Account: ${user?.email ?? 'Signed in'}'
+                      : 'You are using a guest session',
+                  style: TextStyle(
+                    fontStyle: FontStyle.italic,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.7),
+                  ),
+                ),
+              );
+            },
+          ),
+
           // Budget summary box
           Container(
             width: double.infinity,
