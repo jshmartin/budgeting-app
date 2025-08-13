@@ -27,7 +27,7 @@ class HiveService {
 
   static Future<void> saveBudget(BudgetModel budget) async {
     final box = Hive.box<BudgetModel>('budgets');
-    await box.clear(); // Optional: store one active budget
+    await box.clear(); // Optional: store one active budget - this means we only keep the latest budget
     await box.add(budget);
   }
 

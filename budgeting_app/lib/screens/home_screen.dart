@@ -25,6 +25,52 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadBudget();
   }
 
+  String _fmt(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  Future<void> _changeBudgetRange() async {
+    if (_budgetModel == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No active budget to update.')),
+      );
+      return;
+    }
+
+    final initialRange = DateTimeRange(
+      start: _budgetModel!.startDate,
+      end: _budgetModel!.endDate,
+    );
+
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(DateTime.now().year - 5),
+      lastDate: DateTime(DateTime.now().year + 5),
+      initialDateRange: initialRange,
+    );
+
+    if (picked == null) return;
+
+    final updated = BudgetModel(
+      title: _budgetModel!.title,
+      amount: _budgetModel!.amount,
+      startDate: picked.start,
+      endDate: picked.end,
+    );
+
+    await HiveService.saveBudget(updated); // local cache
+    await FirebaseService.saveBudgetToFirebase(updated); // cloud copy
+    setState(() {
+      _budgetModel = updated;
+      _initialBudget = updated.amount;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content: Text(
+              'Budget dates updated: ${_fmt(updated.startDate)} → ${_fmt(updated.endDate)}')),
+    );
+  }
+
   Future<void> _loadTransactions() async {
     final txBox = Hive.box<TransactionModel>('transactions');
 
@@ -101,6 +147,10 @@ class _HomeScreenState extends State<HomeScreen> {
         _initialBudget = latest.amount;
       });
     }
+
+    // print all budgets title and amount
+    print(
+        'Loaded budgets: ${firebaseBudgets.map((b) => '${b.title}: ${b.amount}').join(', ')}');
   }
 
   double get _totalSpent {
@@ -112,50 +162,124 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _promptSetBudget() async {
-    final controller = TextEditingController(text: _initialBudget.toString());
+    final nameController =
+        TextEditingController(text: _budgetModel?.title ?? '');
+    final amountController = TextEditingController(
+      text: _budgetModel?.amount.toString() ??
+          (_initialBudget == 0 ? '' : _initialBudget.toString()),
+    );
 
-    final result = await showDialog<double>(
+    DateTimeRange? pickedRange = (_budgetModel != null)
+        ? DateTimeRange(
+            start: _budgetModel!.startDate, end: _budgetModel!.endDate)
+        : null;
+
+    final formKey = GlobalKey<FormState>();
+
+    final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Set Initial Budget'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(labelText: 'Budget Amount'),
+        title: const Text('Set Budget'),
+        content: StatefulBuilder(
+          builder: (ctx, setInnerState) {
+            return Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: nameController,
+                      decoration:
+                          const InputDecoration(labelText: 'Budget Name'),
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Enter a name'
+                          : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: amountController,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(labelText: 'Amount'),
+                      validator: (v) {
+                        final d = double.tryParse(v?.trim() ?? '');
+                        if (d == null || d <= 0) return 'Enter a valid amount';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Date Range'),
+                      subtitle: Text(
+                        (pickedRange == null)
+                            ? 'Choose start and end dates'
+                            : '${pickedRange!.start.toLocal().toString().split(' ')[0]}  →  ${pickedRange!.end.toLocal().toString().split(' ')[0]}',
+                      ),
+                      trailing: TextButton(
+                        onPressed: () async {
+                          final now = DateTime.now();
+                          final nextMonth =
+                              DateTime(now.year, now.month + 1, now.day);
+                          final range = await showDateRangePicker(
+                            context: context,
+                            firstDate: DateTime(now.year - 5),
+                            lastDate: DateTime(now.year + 5),
+                            initialDateRange: pickedRange ??
+                                DateTimeRange(start: now, end: nextMonth),
+                          );
+                          if (range != null) {
+                            setInnerState(() => pickedRange = range);
+                          }
+                        },
+                        child: const Text('Pick'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
           TextButton(
-            onPressed: () {
-              final value = double.tryParse(controller.text.trim());
-              Navigator.pop(ctx, value);
-            },
+            onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Save'),
           ),
         ],
       ),
     );
 
-    if (result != null && result > 0) {
-      final newBudget = BudgetModel(
-        title: 'My Budget',
-        amount: result,
-        startDate: DateTime.now(),
-        endDate:
-            DateTime.now().add(const Duration(days: 30)), // or custom range
-      );
+    if (result != true) return;
 
-      await HiveService.saveBudget(newBudget);
-      await FirebaseService.saveBudgetToFirebase(newBudget);
-      await _loadBudget();
+    if (!formKey.currentState!.validate() || pickedRange == null) {
+      // If the dialog closed but validation not run, re-open with a hint.
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Please complete all fields, including date range.')),
+      );
+      return;
     }
+
+    final newBudget = BudgetModel(
+      title: nameController.text.trim(),
+      amount: double.parse(amountController.text.trim()),
+      startDate: pickedRange!.start,
+      endDate: pickedRange!.end,
+    );
+
+    await HiveService.saveBudget(newBudget);
+    await FirebaseService.saveBudgetToFirebase(newBudget);
+    await _loadBudget();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('My Budget')),
       body: Column(
         children: [
           // Budget summary box
@@ -166,14 +290,42 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Initial Budget: \$${_initialBudget.toStringAsFixed(2)}',
+                // If budget is set, show details; otherwise prompt to set budget
+                if (_budgetModel != null)
+                  Text(
+                    '${_budgetModel!.title} : \$${_budgetModel!.amount.toStringAsFixed(2)}',
                     style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold)),
+                        fontSize: 18, fontWeight: FontWeight.bold),
+                  )
+                else
+                  const Text(
+                    'No budget set. Please set a budget.',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
                 Text('Spent: \$${_totalSpent.toStringAsFixed(2)}',
                     style: const TextStyle(color: Colors.red)),
                 Text('Remaining: \$${_remainingBudget.toStringAsFixed(2)}',
                     style: const TextStyle(color: Colors.green)),
                 const SizedBox(height: 8),
+                // display date range in dd/mm/yyyy if budget is set
+                if (_budgetModel != null)
+                  Row(
+                    children: [
+                      Chip(
+                        label: Text(
+                            '${_fmt(_budgetModel!.startDate)} → ${_fmt(_budgetModel!.endDate)}'),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.black,
+                        ),
+                        onPressed: _changeBudgetRange,
+                        icon: const Icon(Icons.date_range),
+                        label: const Text('Change Date Range'),
+                      ),
+                    ],
+                  ),
                 ElevatedButton(
                   onPressed: _promptSetBudget,
                   child: const Text('Set / Update Budget'),
