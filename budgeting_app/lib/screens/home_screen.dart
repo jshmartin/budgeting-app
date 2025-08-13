@@ -361,42 +361,20 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Column(
         children: [
-          StreamBuilder<User?>(
-            stream: FirebaseAuth.instance.authStateChanges(),
-            builder: (context, snapshot) {
-              final user = snapshot.data;
-              final signedIn = (user != null && !user.isAnonymous);
-              return Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  signedIn
-                      ? 'Account: ${user?.email ?? 'Signed in'}'
-                      : 'You are using a guest session',
-                  style: TextStyle(
-                    fontStyle: FontStyle.italic,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withOpacity(0.7),
-                  ),
-                ),
-              );
-            },
-          ),
-
           // Budget summary box
           Container(
             width: double.infinity,
             color: Colors.indigo.shade100,
             padding: const EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 // If budget is set, show details; otherwise prompt to set budget
                 if (_budgetModel != null)
                   Text(
                     '${_budgetModel!.title} : \$${_budgetModel!.amount.toStringAsFixed(2)}',
                     style: const TextStyle(
+                      color: Colors.indigo,
                         fontSize: 18, fontWeight: FontWeight.bold),
                   )
                 else
@@ -411,9 +389,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 8),
                 // display date range in dd/mm/yyyy if budget is set
                 if (_budgetModel != null)
-                  Row(
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Chip(
+                        backgroundColor: Colors.indigo.shade200,
+                        labelStyle: const TextStyle(color: Colors.black,
+                            fontWeight: FontWeight.bold,
+                        fontSize: 16),
+                        avatar: const Icon(Icons.date_range, size: 20
+                        ),
                         label: Text(
                             '${_fmt(_budgetModel!.startDate)} → ${_fmt(_budgetModel!.endDate)}'),
                       ),
