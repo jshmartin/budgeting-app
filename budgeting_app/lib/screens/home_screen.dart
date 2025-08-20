@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/budget.dart';
 import '../models/transaction.dart';
 import '../services/firebase_service.dart';
+import '../widgets/budget_summary_card.dart';
 import 'add_transaction_screen.dart';
 import 'package:hive/hive.dart';
 import '../services/hive_service.dart';
@@ -30,48 +31,6 @@ class _HomeScreenState extends State<HomeScreen> {
   String _fmt(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-  Future<void> _changeBudgetRange() async {
-    if (_budgetModel == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No active budget to update.')),
-      );
-      return;
-    }
-
-    final initialRange = DateTimeRange(
-      start: _budgetModel!.startDate,
-      end: _budgetModel!.endDate,
-    );
-
-    final picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(DateTime.now().year - 5),
-      lastDate: DateTime(DateTime.now().year + 5),
-      initialDateRange: initialRange,
-    );
-
-    if (picked == null) return;
-
-    final updated = BudgetModel(
-      title: _budgetModel!.title,
-      amount: _budgetModel!.amount,
-      startDate: picked.start,
-      endDate: picked.end,
-    );
-
-    await HiveService.saveBudget(updated); // local cache
-    await FirebaseService.saveBudgetToFirebase(updated); // cloud copy
-    setState(() {
-      _budgetModel = updated;
-      _initialBudget = updated.amount;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: Text(
-              'Budget dates updated: ${_fmt(updated.startDate)} → ${_fmt(updated.endDate)}')),
-    );
-  }
 
   Future<void> _loadTransactions() async {
     final txBox = Hive.box<TransactionModel>('transactions');
@@ -153,6 +112,26 @@ class _HomeScreenState extends State<HomeScreen> {
     // print all budgets title and amount
     print(
         'Loaded budgets: ${firebaseBudgets.map((b) => '${b.title}: ${b.amount}').join(', ')}');
+  }
+
+  void _promptChangeDateRange() {
+    // Show date range picker and update budget model
+    showDateRangePicker(
+      context: context,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDateRange: DateTimeRange(
+        start: _budgetModel?.startDate ?? DateTime.now(),
+        end: _budgetModel?.endDate ?? DateTime.now().add(const Duration(days: 30)),
+      ),
+    ).then((range) {
+      if (range != null) {
+        setState(() {
+          _budgetModel?.startDate = range.start;
+          _budgetModel?.endDate = range.end;
+        });
+      }
+    });
   }
 
   double get _totalSpent {
@@ -369,54 +348,13 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // If budget is set, show details; otherwise prompt to set budget
-                if (_budgetModel != null)
-                  Text(
-                    '${_budgetModel!.title} : \$${_budgetModel!.amount.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      color: Colors.indigo,
-                        fontSize: 18, fontWeight: FontWeight.bold),
-                  )
-                else
-                  const Text(
-                    'No budget set. Please set a budget.',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                Text('Spent: \$${_totalSpent.toStringAsFixed(2)}',
-                    style: const TextStyle(color: Colors.red)),
-                Text('Remaining: \$${_remainingBudget.toStringAsFixed(2)}',
-                    style: const TextStyle(color: Colors.green)),
-                const SizedBox(height: 8),
-                // display date range in dd/mm/yyyy if budget is set
-                if (_budgetModel != null)
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Chip(
-                        backgroundColor: Colors.indigo.shade200,
-                        labelStyle: const TextStyle(color: Colors.black,
-                            fontWeight: FontWeight.bold,
-                        fontSize: 16),
-                        avatar: const Icon(Icons.date_range, size: 20
-                        ),
-                        label: Text(
-                            '${_fmt(_budgetModel!.startDate)} → ${_fmt(_budgetModel!.endDate)}'),
-                      ),
-                      const SizedBox(width: 8),
-                      TextButton.icon(
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.black,
-                        ),
-                        onPressed: _changeBudgetRange,
-                        icon: const Icon(Icons.date_range),
-                        label: const Text('Change Date Range'),
-                      ),
-                    ],
-                  ),
-                ElevatedButton(
-                  onPressed: _promptSetBudget,
-                  child: const Text('Set / Update Budget'),
-                )
+                BudgetSummaryCard(
+                  budget: _budgetModel!,
+                  spent: _totalSpent,
+                  onChangeRange: _promptChangeDateRange,
+                  onSetBudget: _promptSetBudget,
+                  title: _budgetModel!.title,
+                ),
               ],
             ),
           ),
