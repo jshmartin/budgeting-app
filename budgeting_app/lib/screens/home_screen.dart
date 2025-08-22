@@ -6,10 +6,9 @@ import '../widgets/budget_summary_card.dart';
 import 'add_transaction_screen.dart';
 import 'package:hive/hive.dart';
 import '../services/hive_service.dart';
-import '../models/transaction.dart';
-import 'add_transaction_screen.dart';
 import 'auth_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../widgets/transaction_card.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -31,7 +30,6 @@ class _HomeScreenState extends State<HomeScreen> {
   String _fmt(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-
   Future<void> _loadTransactions() async {
     final txBox = Hive.box<TransactionModel>('transactions');
 
@@ -52,8 +50,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // If Hive is empty, fetch from Firebase and save locally
     final firebaseTxList =
-        await FirebaseService.fetchTransactionsFromFirebase();
-
+        await FirebaseService.fetchTransactionsFromFirebase() ?? [];
     for (final tx in firebaseTxList) {
       await txBox.add(tx);
     }
@@ -109,9 +106,13 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     }
 
-    // print all budgets title and amount
-    print(
-        'Loaded budgets: ${firebaseBudgets.map((b) => '${b.title}: ${b.amount}').join(', ')}');
+    // Safe print (won’t crash on empty)
+    if (firebaseBudgets.isNotEmpty) {
+      print(
+          'Loaded budgets: ${firebaseBudgets.map((b) => '${b.title}: ${b.amount}').join(', ')}');
+    } else {
+      print('Loaded budgets: (none)');
+    }
   }
 
   void _promptChangeDateRange() {
@@ -122,7 +123,8 @@ class _HomeScreenState extends State<HomeScreen> {
       lastDate: DateTime.now().add(const Duration(days: 365)),
       initialDateRange: DateTimeRange(
         start: _budgetModel?.startDate ?? DateTime.now(),
-        end: _budgetModel?.endDate ?? DateTime.now().add(const Duration(days: 30)),
+        end: _budgetModel?.endDate ??
+            DateTime.now().add(const Duration(days: 30)),
       ),
     ).then((range) {
       if (range != null) {
@@ -261,8 +263,9 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      drawer: Drawer(),
       appBar: AppBar(
-        title: const Text('My Budget'),
+        title: const Icon(Icons.account_balance_wallet_outlined),
         actions: [
           // Live auth status
           StreamBuilder<User?>(
@@ -348,77 +351,110 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                BudgetSummaryCard(
-                  budget: _budgetModel!,
-                  spent: _totalSpent,
-                  onChangeRange: _promptChangeDateRange,
-                  onSetBudget: _promptSetBudget,
-                  title: _budgetModel!.title,
-                ),
+                if (_budgetModel == null)
+                  Column(
+                    children: [
+                      const Text(
+                        'No active budget',
+                        style: TextStyle(
+                          color: Colors.black,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: _promptSetBudget,
+                        child: const Text('Create budget'),
+                      ),
+                    ],
+                  )
+                else
+                  BudgetSummaryCard(
+                    budget: _budgetModel!, // now safe
+                    spent: _totalSpent,
+                    onChangeRange: _promptChangeDateRange,
+                    onSetBudget: _promptSetBudget,
+                    title: _budgetModel!.title,
+                  ),
               ],
             ),
           ),
+
           const Divider(),
           // Transaction list
           Expanded(
             child: _transactions.isEmpty
                 ? const Center(child: Text('No transactions yet.'))
-                : ListView.builder(
-                    itemCount: _transactions.length,
-                    itemBuilder: (ctx, index) {
-                      final entry = _transactions[index];
-                      final tx = entry.value;
-                      final txIndex = entry.key;
-                      return Dismissible(
-                        key: ValueKey(txIndex),
-                        direction: DismissDirection.endToStart,
-                        background: Container(
-                          color: Colors.red,
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: const Icon(Icons.delete, color: Colors.white),
-                        ),
-                        confirmDismiss: (_) async {
-                          return await showDialog(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              title: const Text('Delete Transaction'),
-                              content: const Text(
-                                  'Are you sure you want to delete this transaction?'),
-                              actions: [
-                                TextButton(
-                                    onPressed: () => Navigator.pop(ctx, false),
-                                    child: const Text('Cancel')),
-                                TextButton(
-                                    onPressed: () => Navigator.pop(ctx, true),
-                                    child: const Text('Delete')),
-                              ],
-                            ),
+                : Center(
+                    child: SizedBox(
+                      width: 520, // tidy centered column
+                      child: ListView.separated(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 8),
+                        itemCount: _transactions.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 10),
+                        itemBuilder: (ctx, index) {
+                          final entry = _transactions[index];
+                          final tx = entry.value;
+                          final txIndex = entry.key;
+
+                          return TransactionCard(
+                            tx: tx,
+                            onTap: () async {
+                              // tap anywhere on the card to edit (optional)
+                              final result = await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => AddTransactionScreen(
+                                    transactionToEdit: tx,
+                                    indexToEdit: txIndex,
+                                  ),
+                                ),
+                              );
+                              if (result == true) _loadTransactions();
+                            },
+                            onEdit: () async {
+                              final result = await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => AddTransactionScreen(
+                                    transactionToEdit: tx,
+                                    indexToEdit: txIndex,
+                                  ),
+                                ),
+                              );
+                              if (result == true) _loadTransactions();
+                            },
+                            onDelete: () async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text('Delete Transaction'),
+                                  content: const Text(
+                                      'Are you sure you want to delete this transaction?'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(ctx, false),
+                                      child: const Text('Cancel'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx, true),
+                                      child: const Text('Delete'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (confirm == true) {
+                                await HiveService.deleteTransaction(txIndex);
+                                _loadTransactions();
+                              }
+                            },
                           );
                         },
-                        onDismissed: (_) async {
-                          await HiveService.deleteTransaction(txIndex);
-                          _loadTransactions();
-                        },
-                        child: ListTile(
-                          title: Text(tx.title),
-                          subtitle: Text('${tx.date.toLocal()}'.split(' ')[0]),
-                          trailing: Text('\$${tx.amount.toStringAsFixed(2)}'),
-                          onTap: () async {
-                            final result = await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => AddTransactionScreen(
-                                  transactionToEdit: tx,
-                                  indexToEdit: txIndex,
-                                ),
-                              ),
-                            );
-                            if (result == true) _loadTransactions();
-                          },
-                        ),
-                      );
-                    },
+                      ),
+                    ),
                   ),
           ),
         ],

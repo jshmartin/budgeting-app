@@ -34,10 +34,22 @@ class FirebaseService {
   static Future<void> saveBudgetToFirebase(BudgetModel b) async {
     await _budgetRef.add(b.toFirestore());
   }
+  
   static Future<List<BudgetModel>> fetchBudgetsFromFirebase() async {
-    final qs = await _budgetRef.orderBy('startDate', descending: true).get();
-    return qs.docs.map((d) => BudgetModel.fromFirestore(d.data())).toList();
+  try {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('budgets')
+        .get();
+
+    return snapshot.docs
+        .map((doc) => BudgetModel.fromFirestore(doc.data()))
+        .toList();
+  } catch (e) {
+    // On error, return an empty list instead of null
+    return [];
   }
+}
+
 
   // Clear all budgets from Firestore
   static Future<void> deleteAllFirebaseBudgets() async {

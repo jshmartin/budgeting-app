@@ -53,7 +53,7 @@ class BudgetSummaryCard extends StatelessWidget {
     final now = DateTime.now();
     final remaining = (budget.amount - spent).clamp(-999999999.0, 999999999.0);
     final progress = _timeProgress(budget.startDate, budget.endDate, now);
-    final percent = (progress * 100).clamp(0, 100);
+    final percent = ((spent/budget.amount) * 100).clamp(0, 100);
     final daysLeft = _daysLeft(budget.endDate, now);
     final daily = daysLeft > 0 ? remaining / daysLeft : remaining;
 
@@ -118,7 +118,7 @@ class BudgetSummaryCard extends StatelessWidget {
                     IconButton(
                       onPressed: onSetBudget,
                       tooltip: 'Set / Update Budget',
-                      icon: const Icon(Icons.refresh, color: Colors.white),
+                      icon: const Icon(Icons.edit, color: Colors.white),
                     ),
                   ],
                 ),
@@ -158,7 +158,7 @@ class BudgetSummaryCard extends StatelessWidget {
                     LayoutBuilder(
                       builder: (context, constraints) {
                         final barWidth = constraints.maxWidth;
-                        final knobX = (barWidth * progress).clamp(0.0, barWidth);
+                        final knobX = (barWidth * spent / budget.amount).clamp(0.0, barWidth);
 
                         return Stack(
                           clipBehavior: Clip.none,
@@ -201,7 +201,7 @@ class BudgetSummaryCard extends StatelessWidget {
                                       ],
                                     ),
                                     child: const Text(
-                                      'Today',
+                                      'Remaining Budget',
                                       style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
                                     ),
                                   ),
@@ -256,14 +256,6 @@ class BudgetSummaryCard extends StatelessWidget {
                         color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75),
                         fontWeight: FontWeight.w600,
                       ),
-                    ),
-
-                    // Change range action
-                    const SizedBox(height: 10),
-                    TextButton.icon(
-                      onPressed: onChangeRange,
-                      icon: const Icon(Icons.date_range),
-                      label: const Text('Change Date Range'),
                     ),
                   ],
                 ),
