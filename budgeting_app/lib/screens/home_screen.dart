@@ -414,18 +414,6 @@ class _HomeScreenState extends State<HomeScreen> {
                               );
                               if (result == true) _loadTransactions();
                             },
-                            onEdit: () async {
-                              final result = await Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => AddTransactionScreen(
-                                    transactionToEdit: tx,
-                                    indexToEdit: txIndex,
-                                  ),
-                                ),
-                              );
-                              if (result == true) _loadTransactions();
-                            },
                             onDelete: () async {
                               final confirm = await showDialog<bool>(
                                 context: context,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/budget.dart';
+import 'mini_calendar.dart';
 
 class BudgetSummaryCard extends StatelessWidget {
   final BudgetModel budget;
@@ -18,28 +19,10 @@ class BudgetSummaryCard extends StatelessWidget {
     this.onSetBudget,
   });
 
-  String _fmtDate(DateTime d) {
-    // Example: Aug 5
-    const months = [
-      'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'
-    ];
-    return '${months[d.month - 1]} ${d.day}';
-  }
-
   String _fmtMoney(double v) {
     // Simple currency formatter without intl dependency
     final s = v.abs().toStringAsFixed(2);
     return (v < 0 ? '-\$' : '\$') + s;
-  }
-
-  // Percentage of time elapsed in the budget window, clamped 0..1
-  double _timeProgress(DateTime start, DateTime end, DateTime now) {
-    if (!end.isAfter(start)) return 1;
-    if (now.isBefore(start)) return 0;
-    if (now.isAfter(end)) return 1;
-    final total = end.difference(start).inMilliseconds;
-    final soFar = now.difference(start).inMilliseconds;
-    return soFar / total;
   }
 
   // Days remaining (>= 0)
@@ -52,8 +35,8 @@ class BudgetSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final remaining = (budget.amount - spent).clamp(-999999999.0, 999999999.0);
-    final progress = _timeProgress(budget.startDate, budget.endDate, now);
-    final percent = ((spent/budget.amount) * 100).clamp(0, 100);
+    final safeDenominator = (budget.amount == 0 ? 1 : budget.amount);
+    final percent = ((spent / safeDenominator) * 100).clamp(0, 100);
     final daysLeft = _daysLeft(budget.endDate, now);
     final daily = daysLeft > 0 ? remaining / daysLeft : remaining;
 
@@ -117,7 +100,7 @@ class BudgetSummaryCard extends StatelessWidget {
                     ),
                     IconButton(
                       onPressed: onSetBudget,
-                      tooltip: 'Set / Update Budget',
+                      tooltip: 'Update Budget Details',
                       icon: const Icon(Icons.edit, color: Colors.white),
                     ),
                   ],
@@ -132,36 +115,48 @@ class BudgetSummaryCard extends StatelessWidget {
                   borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
                 ),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Dates + timeline
+                    // Days remaining headline + change range
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          _fmtDate(budget.startDate),
+                          daysLeft > 0
+                              ? '$daysLeft day${daysLeft == 1 ? '' : 's'} remaining'
+                              : 'Budget period ends today',
                           style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
-                            fontWeight: FontWeight.w500,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.9),
                           ),
                         ),
-                        Text(
-                          _fmtDate(budget.endDate),
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
-                            fontWeight: FontWeight.w500,
+                        const Spacer(),
+                        if (onChangeRange != null)
+                          TextButton.icon(
+                            onPressed: onChangeRange,
+                            icon: const Icon(Icons.calendar_today_outlined, size: 18),
+                            label: const Text('Change range'),
                           ),
-                        ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    // Progress bar with "Today" bubble & % label
+                    const SizedBox(height: 10),
+
+                    // Mini calendar (month of end date) highlighting remaining days
+                    MiniCalendarRange(
+                      currentDate: now,
+                      endDate: budget.endDate,
+                      showLegend: true,
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Clean spending progress bar (no bubble/knob)
                     LayoutBuilder(
                       builder: (context, constraints) {
                         final barWidth = constraints.maxWidth;
-                        final knobX = (barWidth * spent / budget.amount).clamp(0.0, barWidth);
+                        final ratio = spent / safeDenominator;
+                        final fillWidth = (barWidth * ratio).clamp(0.0, barWidth);
 
                         return Stack(
-                          clipBehavior: Clip.none,
                           children: [
                             // Track
                             Container(
@@ -175,57 +170,10 @@ class BudgetSummaryCard extends StatelessWidget {
                             AnimatedContainer(
                               duration: const Duration(milliseconds: 300),
                               height: 18,
-                              width: knobX,
+                              width: fillWidth,
                               decoration: BoxDecoration(
                                 color: Theme.of(context).colorScheme.primary.withOpacity(0.9),
                                 borderRadius: BorderRadius.circular(9),
-                              ),
-                            ),
-                            // Knob + bubble
-                            Positioned(
-                              left: (knobX - 10).clamp(0.0, barWidth - 20),
-                              top: -28,
-                              child: Column(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(context).colorScheme.surface,
-                                      borderRadius: BorderRadius.circular(6),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.1),
-                                          blurRadius: 6,
-                                          offset: const Offset(0, 2),
-                                        )
-                                      ],
-                                    ),
-                                    child: const Text(
-                                      'Remaining Budget',
-                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Container(
-                                    width: 20,
-                                    height: 20,
-                                    alignment: Alignment.center,
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(context).colorScheme.surface,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: Theme.of(context).colorScheme.primary,
-                                        width: 3,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      '${percent.round()}%',
-                                      style: const TextStyle(
-                                        fontSize: 0, // visually hide inside the knob
-                                      ),
-                                    ),
-                                  ),
-                                ],
                               ),
                             ),
                             // Percent overlay text centered

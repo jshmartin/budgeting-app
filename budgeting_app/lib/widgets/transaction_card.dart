@@ -4,14 +4,12 @@ import '../models/transaction.dart';
 class TransactionCard extends StatelessWidget {
   final TransactionModel tx;
   final VoidCallback? onTap;        // open detail/edit (tap on the card)
-  final VoidCallback? onEdit;       // pencil icon
   final VoidCallback? onDelete;     // trash icon
 
   const TransactionCard({
     super.key,
     required this.tx,
     this.onTap,
-    this.onEdit,
     this.onDelete,
   });
 
@@ -86,24 +84,13 @@ class TransactionCard extends StatelessWidget {
 
               const SizedBox(height: 12),
 
-              // Actions: Edit & Delete
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  IconButton(
-                    tooltip: 'Edit',
-                    onPressed: onEdit,
-                    icon: const Icon(Icons.edit),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
+              // Actions: & Delete
+              IconButton(
                     tooltip: 'Delete',
                     onPressed: onDelete,
                     icon: const Icon(Icons.delete_outline),
                     color: Theme.of(context).colorScheme.error,
                   ),
-                ],
-              ),
             ],
           ),
         ),
