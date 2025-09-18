@@ -50,6 +50,11 @@ class FirebaseService {
   }
 }
 
+  //delete transaction by id
+  static Future<void> deleteTransactionById(String id) async {
+    await _transactionsRef.doc(id).delete();
+  }
+
 
   // Clear all budgets from Firestore
   static Future<void> deleteAllFirebaseBudgets() async {
